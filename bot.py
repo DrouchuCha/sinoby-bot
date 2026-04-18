@@ -1,7 +1,5 @@
 """
 SINOBY MediaPlanBot — Telegram Bot
-====================================
-pip install aiogram==3.7.0 aiohttp python-dotenv
 """
 
 import asyncio
@@ -29,6 +27,10 @@ SHEETS_URL = "https://script.google.com/macros/s/AKfycbypMC4LDH9ItJDLGCru-obQj2q
 
 MANAGER_IDS = [267728315]
 
+# Хранилище данных для кнопок (в памяти)
+doc_storage = {}
+doc_counter = 0
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
@@ -50,6 +52,7 @@ async def cmd_start(msg: Message):
 
 @dp.message(F.web_app_data)
 async def on_webapp_data(msg: Message):
+    global doc_counter
     raw  = msg.web_app_data.data
     user = msg.from_user
     log.info(f"Получены данные от {user.id} (@{user.username}): {raw}")
@@ -108,19 +111,27 @@ async def on_webapp_data(msg: Message):
         parse_mode="HTML", reply_markup=ReplyKeyboardRemove(),
     )
 
-    doc_data = json.dumps({
-        "city": city, "brand": spec, "budget": budget,
-        "calls": calls or "—", "price": price or "—",
-        "channels": ",".join(channels), "goal": goal,
-    }, ensure_ascii=False)
+    # Сохраняем данные в памяти и передаём только короткий ключ
+    doc_counter += 1
+    doc_key = str(doc_counter)
+    doc_storage[doc_key] = {
+        "city":     city,
+        "brand":    spec,
+        "budget":   budget,
+        "calls":    calls or "—",
+        "price":    price or "—",
+        "channels": ",".join(channels),
+        "goal":     goal,
+    }
 
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="📄 Сформировать медиаплан", callback_data=f"doc:{doc_data[:200]}")
+        InlineKeyboardButton(text="📄 Сформировать медиаплан", callback_data=f"doc:{doc_key}")
     ]])
 
     for manager_id in MANAGER_IDS:
         try:
             await bot.send_message(chat_id=manager_id, text=text, parse_mode="HTML", reply_markup=kb)
+            log.info(f"Уведомление отправлено менеджеру {manager_id}")
         except Exception as e:
             log.error(f"Не удалось отправить менеджеру {manager_id}: {e}")
 
@@ -130,14 +141,15 @@ async def on_create_doc(cb: CallbackQuery):
     await cb.answer("Создаю документ...")
     await cb.message.edit_reply_markup(reply_markup=None)
 
-    try:
-        data = json.loads(cb.data[4:])
-    except Exception:
-        await cb.message.answer("⚠️ Ошибка данных.")
+    doc_key = cb.data[4:]
+    data    = doc_storage.get(doc_key)
+
+    if not data:
+        await cb.message.answer("⚠️ Данные устарели. Попросите клиента пройти квиз заново.")
         return
 
     params = {
-        "action": "create_doc",
+        "action":   "create_doc",
         "city":     data.get("city",     ""),
         "brand":    data.get("brand",    ""),
         "budget":   data.get("budget",   ""),
