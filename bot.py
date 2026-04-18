@@ -1,11 +1,7 @@
 """
 SINOBY MediaPlanBot — Telegram Bot
 ====================================
-Требования:
-  pip install aiogram==3.x aiohttp python-dotenv
-
-Запуск:
-  python bot.py
+pip install aiogram==3.7.0 aiohttp python-dotenv
 """
 
 import asyncio
@@ -13,126 +9,87 @@ import json
 import logging
 import os
 from datetime import datetime
+from urllib.parse import urlencode
 
+import aiohttp
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import (
-    Message,
-    WebAppInfo,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    WebAppData,
-    ReplyKeyboardMarkup,
-    KeyboardButton,
-    ReplyKeyboardRemove,
+    Message, WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton,
+    WebAppData, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
+    CallbackQuery,
 )
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ══ НАСТРОЙКИ ══════════════════════════════════════════════
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBAPP_URL  = os.getenv("WEBAPP_URL", "https://drouchucha.github.io/sinoby-mediaplan/")
+BOT_TOKEN  = os.getenv("BOT_TOKEN")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://drouchucha.github.io/sinoby-mediaplan/")
+SHEETS_URL = "https://script.google.com/macros/s/AKfycbzmohhfHltCO1SYx8OY2jIO_SKF1pB-xnIsONvqkw4x3hwdg7K3ZReZLa4TnDiHxquf/exec"
 
-# ID менеджеров — сюда будут приходить уведомления о новых заявках
-# Добавьте свой Telegram ID (узнать можно у @userinfobot)
-MANAGER_IDS = [
-    267728315,
-]
-# ═══════════════════════════════════════════════════════════
+MANAGER_IDS = [267728315]
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
 bot = Bot(token=BOT_TOKEN)
 dp  = Dispatcher()
 
 
-# ── /start ──────────────────────────────────────────────────
 @dp.message(CommandStart())
 async def cmd_start(msg: Message):
     kb = ReplyKeyboardMarkup(
-        keyboard=[[
-            KeyboardButton(
-                text="📋 Создать медиаплан",
-                web_app=WebAppInfo(url=WEBAPP_URL)
-            )
-        ]],
+        keyboard=[[KeyboardButton(text="📋 Создать медиаплан", web_app=WebAppInfo(url=WEBAPP_URL))]],
         resize_keyboard=True,
-        one_time_keyboard=False,
     )
     await msg.answer(
-        "👋 Добро пожаловать в <b>SINOBY MediaPlanBot</b>\n\n"
-        "Нажмите кнопку ниже чтобы создать медиаплан.\n"
-        "Это займёт меньше минуты.",
-        parse_mode="HTML",
-        reply_markup=kb,
+        "👋 Добро пожаловать в <b>SINOBY MediaPlanBot</b>\n\nНажмите кнопку ниже чтобы создать медиаплан.",
+        parse_mode="HTML", reply_markup=kb,
     )
 
 
-# ── Получение данных из Mini App ────────────────────────────
 @dp.message(F.web_app_data)
 async def on_webapp_data(msg: Message):
     raw  = msg.web_app_data.data
     user = msg.from_user
-
     log.info(f"Получены данные от {user.id} (@{user.username}): {raw}")
 
-    # Парсим JSON из мини-апп
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
-        await msg.answer("⚠️ Ошибка при получении данных. Попробуйте ещё раз.")
+        await msg.answer("⚠️ Ошибка при получении данных.")
         return
 
-    # ── Формируем красивое сообщение ──
     category  = data.get("category", "—")
     region    = data.get("region",   "—")
     district  = data.get("district", "—")
     city      = data.get("city",     "—")
     spec      = data.get("spec",     "—")
     goal      = data.get("goal",     "—")
-    channel   = data.get("channel",  "—")
     channels  = data.get("channels", [])
-    channel_str = ", ".join(channels) if channels else channel
     budget    = data.get("budget",   "—")
     calls     = data.get("forecast_calls")
     price     = data.get("forecast_price")
     ts        = data.get("ts", "")
 
-    # Метка категории детализации
-    spec_label = (
-        "Бренд"      if category == "Авто" else
-        "Категория"  if category == "Недвижимость" else
-        "Направление"
-    )
+    spec_label  = "Бренд" if category == "Авто" else "Категория" if category == "Недвижимость" else "Направление"
+    channel_str = ", ".join(channels) if channels else "—"
 
-    # Время
     try:
         dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
         time_str = dt.strftime("%d.%m.%Y %H:%M")
     except Exception:
         time_str = datetime.now().strftime("%d.%m.%Y %H:%M")
 
-    # Прогноз (только для Авто)
     forecast_block = ""
     if calls and price:
-        forecast_block = (
-            f"\n📊 <b>Прогноз (Яндекс Директ)</b>\n"
-            f"├ Звонков в месяц: <b>~{calls}</b>\n"
-            f"└ Цена звонка: <b>~{price}</b>\n"
-        )
+        forecast_block = f"\n📊 <b>Прогноз</b>\n├ Звонков в месяц: <b>~{calls}</b>\n└ Цена звонка: <b>~{price}</b>\n"
 
-    # Имя пользователя
-    name = user.full_name or "—"
+    name     = user.full_name or "—"
     username = f"@{user.username}" if user.username else f"ID:{user.id}"
 
     text = (
-        f"📋 <b>Новый запрос на медиаплан</b>\n"
-        f"{'─' * 28}\n"
+        f"📋 <b>Новый запрос на медиаплан</b>\n{'─'*28}\n"
         f"🏷 Сфера: <b>{category}</b>\n"
         f"📍 Регион: <b>{region} ({district})</b>\n"
         f"🏙 Город: <b>{city}</b>\n"
@@ -141,51 +98,82 @@ async def on_webapp_data(msg: Message):
         f"📡 Канал: <b>{channel_str}</b>\n"
         f"💰 Бюджет: <b>{budget}</b>\n"
         f"{forecast_block}"
-        f"{'─' * 28}\n"
-        f"👤 {name} · {username}\n"
-        f"🕐 {time_str}"
+        f"{'─'*28}\n"
+        f"👤 {name} · {username}\n🕐 {time_str}"
     )
 
-    # ── Отправляем пользователю подтверждение ──
     await msg.answer(
-        f"✅ <b>Запрос принят!</b>\n\n"
-        f"Наш менеджер свяжется с вами в ближайшее время.\n\n"
-        f"<b>Ваши параметры:</b>\n"
-        f"• Сфера: {category}\n"
-        f"• Город: {city}\n"
-        f"• {spec_label}: {spec}\n"
-        f"• Бюджет: {budget}",
-        parse_mode="HTML",
-        reply_markup=ReplyKeyboardRemove(),
+        f"✅ <b>Запрос принят!</b>\n\nНаш менеджер свяжется с вами в ближайшее время.\n\n"
+        f"<b>Ваши параметры:</b>\n• Сфера: {category}\n• Город: {city}\n• {spec_label}: {spec}\n• Бюджет: {budget}",
+        parse_mode="HTML", reply_markup=ReplyKeyboardRemove(),
     )
 
-    # ── Уведомляем всех менеджеров ──
+    doc_data = json.dumps({
+        "city": city, "brand": spec, "budget": budget,
+        "calls": calls or "—", "price": price or "—",
+        "channels": ",".join(channels), "goal": goal,
+    }, ensure_ascii=False)
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📄 Сформировать медиаплан", callback_data=f"doc:{doc_data[:200]}")
+    ]])
+
     for manager_id in MANAGER_IDS:
         try:
-            await bot.send_message(
-                chat_id=manager_id,
-                text=text,
-                parse_mode="HTML",
-            )
-            log.info(f"Уведомление отправлено менеджеру {manager_id}")
+            await bot.send_message(chat_id=manager_id, text=text, parse_mode="HTML", reply_markup=kb)
         except Exception as e:
             log.error(f"Не удалось отправить менеджеру {manager_id}: {e}")
 
 
-# ── /help ────────────────────────────────────────────────────
+@dp.callback_query(F.data.startswith("doc:"))
+async def on_create_doc(cb: CallbackQuery):
+    await cb.answer("Создаю документ...")
+    await cb.message.edit_reply_markup(reply_markup=None)
+
+    try:
+        data = json.loads(cb.data[4:])
+    except Exception:
+        await cb.message.answer("⚠️ Ошибка данных.")
+        return
+
+    params = {
+        "action": "create_doc",
+        "city":     data.get("city",     ""),
+        "brand":    data.get("brand",    ""),
+        "budget":   data.get("budget",   ""),
+        "calls":    data.get("calls",    "—"),
+        "price":    data.get("price",    "—"),
+        "channels": data.get("channels", "Яндекс Директ"),
+        "goal":     data.get("goal",     ""),
+    }
+
+    url = SHEETS_URL + "?" + urlencode(params)
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                result = await resp.json(content_type=None)
+
+        if result.get("ok"):
+            await cb.message.answer(
+                f"📄 <b>Медиаплан сформирован!</b>\n\n"
+                f"<b>{result.get('title','Медиаплан')}</b>\n\n"
+                f"🔗 <a href='{result.get('url','')}'>Открыть документ</a>",
+                parse_mode="HTML", disable_web_page_preview=True,
+            )
+        else:
+            await cb.message.answer(f"⚠️ Ошибка: {result.get('error','Неизвестная ошибка')}")
+
+    except Exception as e:
+        log.error(f"Ошибка создания документа: {e}")
+        await cb.message.answer(f"⚠️ Ошибка: {e}")
+
+
 @dp.message(Command("help"))
 async def cmd_help(msg: Message):
-    await msg.answer(
-        "ℹ️ <b>SINOBY MediaPlanBot</b>\n\n"
-        "Команды:\n"
-        "/start — открыть квиз медиаплана\n"
-        "/help  — справка\n\n"
-        "По вопросам: @sinoby_manager",
-        parse_mode="HTML",
-    )
+    await msg.answer("ℹ️ <b>SINOBY MediaPlanBot</b>\n\n/start — квиз медиаплана\n/help — справка", parse_mode="HTML")
 
 
-# ── Запуск ───────────────────────────────────────────────────
 async def main():
     log.info("Бот запускается...")
     await dp.start_polling(bot, skip_updates=True)
