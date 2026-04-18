@@ -31,7 +31,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ══ НАСТРОЙКИ ══════════════════════════════════════════════
-BOT_TOKEN   = os.getenv("BOT_TOKEN", "ВАШ_ТОКЕН_СЮДА")
+BOT_TOKEN   = os.getenv("BOT_TOKEN", "8713532761:AAHK_SnYxnkOHIElfV0Plnd_eTvBxDgdAEU")
 WEBAPP_URL  = os.getenv("WEBAPP_URL", "https://drouchucha.github.io/sinoby-mediaplan/")
 
 # ID менеджеров — сюда будут приходить уведомления о новых заявках
