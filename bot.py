@@ -25,7 +25,7 @@ load_dotenv()
 
 BOT_TOKEN  = os.getenv("BOT_TOKEN")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://drouchucha.github.io/sinoby-mediaplan/")
-SHEETS_URL = "https://script.google.com/macros/s/AKfycbzmohhfHltCO1SYx8OY2jIO_SKF1pB-xnIsONvqkw4x3hwdg7K3ZReZLa4TnDiHxquf/exec"
+SHEETS_URL = "https://script.google.com/macros/s/AKfycbypMC4LDH9ItJDLGCru-obQj2qmWrdqTnFYtZUlQCimSSrUACYxkZuSG87msvxfwPshNw/exec"
 
 MANAGER_IDS = [267728315]
 
