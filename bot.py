@@ -28,6 +28,8 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from PIL import Image as PILImage
 
+from vkteams import send_quiz_to_vkteams, send_mediaplan_to_vkteams
+
 load_dotenv()
 
 BOT_TOKEN  = os.getenv("BOT_TOKEN")
@@ -370,6 +372,17 @@ async def on_webapp_data(msg: Message):
         except Exception as e:
             log.error(f"Не удалось отправить менеджеру {manager_id}: {e}")
 
+    # Дублируем уведомление в VK Teams
+    try:
+        user_handle = f"@{user.username}" if user.username else f"ID:{user.id}"
+        await send_quiz_to_vkteams(
+            quiz_data=data,
+            user_name=user.full_name or "",
+            user_handle=user_handle,
+        )
+    except Exception as e:
+        log.error(f"VK Teams: не удалось отправить уведомление: {e}")
+
 
 @dp.callback_query(F.data.startswith("doc:"))
 async def on_create_doc(cb: CallbackQuery):
@@ -397,6 +410,17 @@ async def on_create_doc(cb: CallbackQuery):
             caption=f"📄 <b>Медиаплан готов</b>\n{brand} · {city}",
             parse_mode="HTML",
         )
+
+        # Дублируем XLSX в VK Teams
+        try:
+            await send_mediaplan_to_vkteams(
+                file_bytes=xlsx_bytes,
+                filename=fname,
+                brand=brand,
+                city=city,
+            )
+        except Exception as e:
+            log.error(f"VK Teams: не удалось отправить файл медиаплана: {e}")
     except Exception as e:
         log.error(f"Ошибка создания Excel: {e}")
         await cb.message.answer(f"⚠️ Ошибка: {e}")
