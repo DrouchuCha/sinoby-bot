@@ -142,19 +142,20 @@ def create_excel_bytes(data):
     # Ширина A=134px, B=123px (формула: width ≈ (px - 5) / 7 для шрифта по умолчанию)
     ws.column_dimensions['A'].width = (134 - 5) / 7   # ≈ 18.43
     ws.column_dimensions['B'].width = (123 - 5) / 7   # ≈ 16.86
-    # Высота строки 96px (формула: pt = px * 72/96)
-    ws.row_dimensions[1].height = 96 * 72 / 96        # = 72 pt = 96 px
+    # Высота строки 1 — увеличена до 126 px чтобы вместить логотип высотой 1.31"
+    # (формула: pt = px * 72/96, при 96 DPI)
+    ws.row_dimensions[1].height = 126 * 72 / 96       # = 94.5 pt = 126 px
 
-    # Логотип на A1:B1 (объединённая ячейка ~257px × 96px)
+    # Логотип на A1:B1
     ws.merge_cells('A1:B1')
     logo_bytes = base64.b64decode(LOGO_B64)
     tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
     tmp.write(logo_bytes)
     tmp.close()
     xl_img = XLImage(tmp.name)
-    # Соотношение логотипа ~4.1:1; вписываем в 250×61 px чтобы не выходить за ячейку
-    xl_img.width  = 250
-    xl_img.height = 61
+    # Размеры по ТЗ: 3.64" × 1.31" (при 96 DPI = 349×126 px)
+    xl_img.width  = 349   # 3.64 дюйма
+    xl_img.height = 126   # 1.31 дюйма
     xl_img.anchor = 'A1'
     ws.add_image(xl_img)
 
