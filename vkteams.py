@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 VKTEAMS_API_BASE = os.getenv("VKTEAMS_API_BASE", "https://myteam.mail.ru/bot/v1")
 VKTEAMS_TOKEN = os.getenv("VKTEAMS_TOKEN", "")
-VKTEAMS_MANAGER_ID = os.getenv("VKTEAMS_MANAGER_ID", "")
+VKTEAMS_MANAGER_ID = os.getenv("VKTEAMS_MANAGER_ID", "004.1042775744.3032329460:1011925711")
 
 
 def _format_quiz_message(d: dict, user_name: str = "", user_handle: str = "") -> str:
